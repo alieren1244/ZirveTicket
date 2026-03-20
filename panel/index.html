@@ -1,0 +1,133 @@
+﻿<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zirve Ticket Panel</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">Z</div>
+        <div>
+          <h2>Zirve Admin</h2>
+          <p>Ticket Control Panel</p>
+        </div>
+      </div>
+
+      <nav class="menu">
+        <button class="menu-btn active">Genel Ayarlar</button>
+        <button class="menu-btn">Kategoriler</button>
+        <button class="menu-btn">Log & Transcript</button>
+        <button class="menu-btn">Güvenlik</button>
+        <button class="menu-btn">Bot & Sistem</button>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <div>
+          <h1>Zirve Ticket Yönetim Paneli</h1>
+          <p>Bot ayarlarını kaydet, kategorileri düzenle ve sistemi tek merkezden yönet.</p>
+        </div>
+        <button id="saveTopBtn" class="primary-btn">Ayarları Kaydet</button>
+      </header>
+
+      <section class="grid">
+        <div class="card span-2">
+          <h3>Genel Ayarlar</h3>
+          <div class="form-grid">
+            <div class="field">
+              <label>Bot Adı</label>
+              <input id="botName" />
+            </div>
+            <div class="field">
+              <label>Panel Başlığı</label>
+              <input id="panelTitle" />
+            </div>
+            <div class="field span-2">
+              <label>Panel Alt Başlığı</label>
+              <input id="panelSubtitle" />
+            </div>
+            <div class="field span-2">
+              <label>Panel Açıklaması</label>
+              <textarea id="panelDescription"></textarea>
+            </div>
+            <div class="field">
+              <label>Log Kanal ID</label>
+              <input id="logChannelId" />
+            </div>
+            <div class="field">
+              <label>Transcript Kanal ID</label>
+              <input id="transcriptChannelId" />
+            </div>
+            <div class="field">
+              <label>Varsayılan Support Rol ID</label>
+              <input id="defaultSupportRoleId" />
+            </div>
+            <div class="field">
+              <label>Maks Açık Ticket</label>
+              <input id="maxTicketsPerUser" type="number" />
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Önizleme</h3>
+          <div class="preview">
+            <h2 id="previewTitle">Zirve Group Support Center</h2>
+            <p id="previewSubtitle">Advanced Ticket Administration</p>
+            <small id="previewDesc">Taleplerin hızlı, düzenli ve profesyonel değerlendirilmesi için uygun departmanı seçin.</small>
+          </div>
+        </div>
+
+        <div class="card span-3">
+          <h3>Özellikler</h3>
+          <div class="switch-grid">
+            <label><input type="checkbox" id="transcriptEnabled" /> Transcript Sistemi</label>
+            <label><input type="checkbox" id="claimEnabled" /> Claim Sistemi</label>
+            <label><input type="checkbox" id="blacklistEnabled" /> Blacklist Sistemi</label>
+            <label><input type="checkbox" id="renameEnabled" /> Rename Sistemi</label>
+            <label><input type="checkbox" id="addRemoveEnabled" /> Üye Ekle / Çıkar</label>
+            <label><input type="checkbox" id="satisfactionEnabled" /> Memnuniyet Puanı</label>
+            <label><input type="checkbox" id="multiLanguage" /> Çoklu Dil</label>
+            <label><input type="checkbox" id="closeReasonEnabled" /> Kapatma Sebebi</label>
+            <label><input type="checkbox" id="autoCloseInactive" /> Oto Boşta Kapat</label>
+            <label><input type="checkbox" id="dmNotifications" /> DM Bildirimleri</label>
+            <label><input type="checkbox" id="requireCategoryChoice" /> Kategori Seçimi Zorunlu</label>
+            <label><input type="checkbox" id="showTicketNumber" /> Ticket Numarası</label>
+            <label><input type="checkbox" id="autoTagSupport" /> Support Rol Etiketle</label>
+            <label><input type="checkbox" id="antiSpamEnabled" /> Spam Koruması</label>
+            <label><input type="checkbox" id="backupEnabled" /> Yedekleme</label>
+          </div>
+        </div>
+
+        <div class="card span-3">
+          <div class="row-between">
+            <h3>Kategoriler</h3>
+            <button id="addCategoryBtn" class="secondary-btn">Kategori Ekle</button>
+          </div>
+          <div id="categoriesWrap"></div>
+        </div>
+
+        <div class="card span-3">
+          <div class="row-between">
+            <h3>Bağlantı</h3>
+            <div class="api-box">
+              <input id="apiBase" placeholder="https://senin-replit-linkin.repl.co" />
+              <input id="apiKey" placeholder="PANEL_API_KEY" />
+            </div>
+          </div>
+          <p class="muted">Netlify'de çalışırken panel buradaki API adresine bağlanır. Ayar kaydı doğrudan bot API'sine gider.</p>
+          <button id="saveBottomBtn" class="primary-btn">API'ye Kaydet</button>
+          <div id="statusBox" class="status"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

@@ -1,6 +1,9 @@
-require("dotenv").config();
+﻿require("dotenv").config();
+
 const fs = require("fs");
 const path = require("path");
+const express = require("express");
+const cors = require("cors");
 const {
   Client,
   GatewayIntentBits,
@@ -19,112 +22,178 @@ const {
   EmbedBuilder,
 } = require("discord.js");
 
-const LOG_CHANNEL_ID = "1395722793915519026";
-
-const CATEGORY_MAP = {
-  hr: {
-    labelTr: "İnsan Kaynakları",
-    labelEn: "Human Resources",
-    channelCategoryId: "1395796764493090846",
-    emoji: "👥",
-    prefix: "hr",
-    description: "Recruitment, membership and internal team applications",
-  },
-  slot: {
-    labelTr: "Slot Seçimi",
-    labelEn: "Slot Selection",
-    channelCategoryId: "1395722328607952999",
-    emoji: "🎟️",
-    prefix: "slot",
-    description: "Slot requests and reservation processes",
-  },
-  convoy: {
-    labelTr: "Konvoy Daveti",
-    labelEn: "Convoy Invitation",
-    channelCategoryId: "1395722333104115815",
-    emoji: "🚛",
-    prefix: "convoy",
-    description: "Official convoy invitations and event participation requests",
-  },
-  partner: {
-    labelTr: "Partner",
-    labelEn: "Partnership",
-    channelCategoryId: "1395722293841498234",
-    emoji: "🤝",
-    prefix: "partner",
-    description: "Partnership and collaboration requests",
-  },
-};
-
+const PORT = process.env.PORT || 3000;
+const PANEL_API_KEY = process.env.PANEL_API_KEY || "zirve-panel-key";
+const SETTINGS_PATH = path.resolve(__dirname, "..", "shared", "settings.json");
 const DATA_DIR = path.join(__dirname, "data");
 const STATE_PATH = path.join(DATA_DIR, "state.json");
 
-function ensureState() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-
-  if (!fs.existsSync(STATE_PATH)) {
-    fs.writeFileSync(
-      STATE_PATH,
-      JSON.stringify(
-        {
-          counters: {
-            hr: 0,
-            slot: 0,
-            convoy: 0,
-            partner: 0,
-          },
-          claims: {},
-          blacklistedUsers: [],
-        },
-        null,
-        2
-      ),
-      "utf8"
-    );
+function ensureDir(dirPath) {
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
   }
 }
 
-function readState() {
-  ensureState();
-  return JSON.parse(fs.readFileSync(STATE_PATH, "utf8"));
+function ensureFile(filePath, fallback) {
+  ensureDir(path.dirname(filePath));
+  if (!fs.existsSync(filePath)) {
+    fs.writeFileSync(filePath, JSON.stringify(fallback, null, 2), "utf8");
+  }
 }
 
-function writeState(data) {
-  ensureState();
-  fs.writeFileSync(STATE_PATH, JSON.stringify(data, null, 2), "utf8");
+function readJson(filePath, fallback) {
+  ensureFile(filePath, fallback);
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch (error) {
+    console.error(`JSON okuma hatası: ${filePath}`, error);
+    return fallback;
+  }
 }
 
-function nextNumber(categoryKey) {
-  const state = readState();
+function writeJson(filePath, data) {
+  ensureDir(path.dirname(filePath));
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf8");
+}
+
+function getDefaultSettings() {
+  return {
+    botName: "Zirve Ticket",
+    panelTitle: "Zirve Group Support Center",
+    panelSubtitle: "Advanced Ticket Administration",
+    panelDescription:
+      "Taleplerin hızlı, düzenli ve profesyonel değerlendirilmesi için uygun departmanı seçin.",
+    logChannelId: "1395722793915519026",
+    transcriptChannelId: "1395722793915519026",
+    defaultSupportRoleId: "",
+    archiveCategoryId: "",
+    blacklistRoleId: "",
+    maxTicketsPerUser: 2,
+    transcriptEnabled: true,
+    claimEnabled: true,
+    blacklistEnabled: true,
+    renameEnabled: true,
+    addRemoveEnabled: true,
+    satisfactionEnabled: true,
+    multiLanguage: true,
+    closeReasonEnabled: true,
+    autoCloseInactive: true,
+    dmNotifications: true,
+    requireCategoryChoice: true,
+    showTicketNumber: true,
+    autoTagSupport: true,
+    antiSpamEnabled: true,
+    backupEnabled: true,
+    categories: [
+      {
+        key: "hr",
+        name: "İnsan Kaynakları",
+        english: "Human Resources",
+        emoji: "👥",
+        categoryId: "1395796764493090846",
+        supportRole: "",
+        logChannel: "1395722793915519026",
+        priority: "Normal",
+        enabled: true,
+        requireReason: true,
+        autoTranscript: true,
+      },
+      {
+        key: "slot",
+        name: "Slot Seçimi",
+        english: "Slot Selection",
+        emoji: "🎟️",
+        categoryId: "1395722328607952999",
+        supportRole: "",
+        logChannel: "1395722793915519026",
+        priority: "Normal",
+        enabled: true,
+        requireReason: true,
+        autoTranscript: true,
+      },
+      {
+        key: "convoy",
+        name: "Konvoy Daveti",
+        english: "Convoy Invitation",
+        emoji: "🚛",
+        categoryId: "1395722333104115815",
+        supportRole: "",
+        logChannel: "1395722793915519026",
+        priority: "Yüksek",
+        enabled: true,
+        requireReason: true,
+        autoTranscript: true,
+      },
+      {
+        key: "partner",
+        name: "Partner",
+        english: "Partnership",
+        emoji: "🤝",
+        categoryId: "1395722293841498234",
+        supportRole: "",
+        logChannel: "1395722793915519026",
+        priority: "Yüksek",
+        enabled: true,
+        requireReason: true,
+        autoTranscript: true,
+      },
+    ],
+  };
+}
+
+function getDefaultState() {
+  return {
+    counters: {},
+    claims: {},
+    blacklistedUsers: [],
+  };
+}
+
+function getSettings() {
+  return readJson(SETTINGS_PATH, getDefaultSettings());
+}
+
+function saveSettings(data) {
+  writeJson(SETTINGS_PATH, data);
+}
+
+function getState() {
+  return readJson(STATE_PATH, getDefaultState());
+}
+
+function saveState(state) {
+  writeJson(STATE_PATH, state);
+}
+
+function nextTicketNumber(categoryKey) {
+  const state = getState();
   state.counters[categoryKey] = (state.counters[categoryKey] || 0) + 1;
-  writeState(state);
+  saveState(state);
   return state.counters[categoryKey];
 }
 
-function setClaim(channelId, userId) {
-  const state = readState();
-  state.claims[channelId] = userId;
-  writeState(state);
+function getClaim(channelId) {
+  return getState().claims[channelId] || null;
 }
 
-function getClaim(channelId) {
-  const state = readState();
-  return state.claims[channelId] || null;
+function setClaim(channelId, userId) {
+  const state = getState();
+  state.claims[channelId] = userId;
+  saveState(state);
 }
 
 function clearClaim(channelId) {
-  const state = readState();
+  const state = getState();
   delete state.claims[channelId];
-  writeState(state);
+  saveState(state);
 }
 
 function isBlacklisted(userId) {
-  const state = readState();
-  return state.blacklistedUsers.includes(userId);
+  return getState().blacklistedUsers.includes(userId);
 }
 
 function getTicketOwnerFromChannel(channel) {
-  const topic = channel.topic || "";
+  const topic = channel?.topic || "";
   const match = topic.match(/owner:(\d+)/);
   return match ? match[1] : null;
 }
@@ -138,130 +207,79 @@ function isTicketChannel(channel) {
   );
 }
 
-function sanitizeUsername(username) {
-  return username
+function sanitizeName(value) {
+  return String(value)
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "")
-    .slice(0, 10) || "user";
+    .slice(0, 12) || "user";
 }
 
-function formatTicketName(categoryKey, username) {
-  const config = CATEGORY_MAP[categoryKey];
-  const no = String(nextNumber(categoryKey)).padStart(2, "0");
-  return `${config.prefix}-${sanitizeUsername(username)}-${no}`;
-}
-
-function getOpenTicketByUser(guild, userId) {
-  return guild.channels.cache.find(
+function countOpenTicketsForUser(guild, userId) {
+  return guild.channels.cache.filter(
     (c) => isTicketChannel(c) && getTicketOwnerFromChannel(c) === userId
-  );
+  ).size;
 }
 
-async function sendLog(guild, embed) {
-  try {
-    const logChannel = guild.channels.cache.get(LOG_CHANNEL_ID);
-    if (!logChannel || logChannel.type !== ChannelType.GuildText) return;
-    await logChannel.send({ embeds: [embed] });
-  } catch (error) {
-    console.error("Log hatası:", error);
-  }
+function getCategoryConfig(key) {
+  const settings = getSettings();
+  return (settings.categories || []).find((c) => c.key === key);
 }
 
-function buildMainPanelEmbedTR() {
-  return new EmbedBuilder()
+function buildPanelEmbeds(settings) {
+  const tr = new EmbedBuilder()
     .setColor(0xea580c)
-    .setTitle("🎫 Zirve Group Destek Merkezi")
+    .setTitle("🎫 " + (settings.panelTitle || "Zirve Group Destek Merkezi"))
     .setDescription(
-`<:Balant:1038559583792279592> **Etkinlik Bileti Oluşturma**
-
-*𝐙𝐢𝐫𝐯𝐞 𝐆𝐫𝐨𝐮𝐩 olarak, etkinlik taleplerinizi değerlendirme sürecimiz belirli kriterlere dayanmaktadır. Lütfen taleplerinizi aşağıdaki kurallar doğrultusunda oluşturunuz.*
-
-<:Liste:1289694216796111019> **Kabul Edilmeyen Talepler** <a:JETX:1296885473758810112>
-
-<:SariNokta:1289694521461964810> *Cuma ve Cumartesi haricindeki günlerde yapılan etkinlik talepleri. (Özel Günler Dahil)*
-<:SariNokta:1289694521461964810> *18:30 UTC (21:30) öncesinde başlayan etkinlikler.*
-<:SariNokta:1289694521461964810> *Konvoy kontrolü sağlanmayan etkinlikler.* **(CC Ekibi Bulunmayan)**
-<:SariNokta:1289694521461964810> *Yeni açılan ekiplerden gelen davetler.*
-<:SariNokta:1289694521461964810> *Slotları paylaşılmamış etkinlik davetleri.*`
+      `${settings.panelDescription || "Lütfen uygun departmanı seçin."}\n\n` +
+        `**Etkinlik Bileti Oluşturma**\n` +
+        `• Cuma ve Cumartesi dışındaki etkinlik talepleri kabul edilmez.\n` +
+        `• 18:30 UTC öncesi başlayan etkinlikler kabul edilmez.\n` +
+        `• CC ekibi olmayan etkinlikler kabul edilmez.\n` +
+        `• Yeni açılmış ekiplerden gelen davetler kabul edilmez.\n` +
+        `• Slot bilgisi paylaşılmamış davetler kabul edilmez.`
     )
-    .setFooter({ text: "Zirve Group Ticket System" });
-}
+    .setFooter({ text: settings.botName || "Zirve Ticket" });
 
-function buildMainPanelEmbedEN() {
-  return new EmbedBuilder()
+  const en = new EmbedBuilder()
     .setColor(0xfacc15)
     .setTitle("📌 Creating an Event Ticket")
     .setDescription(
-`*As 𝐙𝐢𝐫𝐯𝐞 𝐆𝐫𝐨𝐮𝐩, our evaluation process for your event requests is based on certain criteria. Please create your requests in accordance with the rules below.*
-
-**Requests Not Accepted**
-
-• *Event requests made on days other than Friday and Saturday. (Including Special Days)*
-• *Events starting before 18:30 UTC (21:30).*
-• *Events without convoy control.* **(No CC Team)**
-• *Invitations from newly opened teams.*
-• *Event invitations with unshared slots.*`
+      `Please choose the correct department before creating a request.\n\n` +
+        `**Requests Not Accepted**\n` +
+        `• Events outside Friday and Saturday\n` +
+        `• Events starting before 18:30 UTC\n` +
+        `• Events without convoy control team\n` +
+        `• Invitations from newly opened teams\n` +
+        `• Invitations with unshared slot information`
     );
+
+  return [tr, en];
 }
 
-function buildCategoryInfoEmbed() {
-  return new EmbedBuilder()
-    .setColor(0xf59e0b)
-    .setTitle("Departments")
-    .addFields(
-      {
-        name: "👥 Human Resources",
-        value: "Recruitment, membership and internal team applications",
-        inline: false,
-      },
-      {
-        name: "🎟️ Slot Selection",
-        value: "Slot requests and reservation processes",
-        inline: false,
-      },
-      {
-        name: "🚛 Convoy Invitation",
-        value: "Official convoy invitations and event participation requests",
-        inline: false,
-      },
-      {
-        name: "🤝 Partnership",
-        value: "Partnership and collaboration requests",
-        inline: false,
-      }
-    );
-}
+function buildPanelComponents(settings) {
+  const enabledCategories = (settings.categories || []).filter((c) => c.enabled);
 
-function buildPanelComponents() {
+  if (!enabledCategories.length) {
+    const disabledButton = new ButtonBuilder()
+      .setCustomId("ticket_disabled")
+      .setLabel("Kategori Yok")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(true);
+
+    return [new ActionRowBuilder().addComponents(disabledButton)];
+  }
+
+  const options = enabledCategories.slice(0, 25).map((c) => ({
+    label: `${c.name} | ${c.english}`.slice(0, 100),
+    description: `${c.priority} öncelik`.slice(0, 100),
+    value: c.key,
+    emoji: c.emoji || "🎫",
+  }));
+
   const select = new StringSelectMenuBuilder()
     .setCustomId("ticket_category_select")
     .setPlaceholder("Bir kategori seç | Select a category")
-    .addOptions([
-      {
-        label: "İnsan Kaynakları | Human Resources",
-        description: "Recruitment and HR requests",
-        value: "hr",
-        emoji: "👥",
-      },
-      {
-        label: "Slot Seçimi | Slot Selection",
-        description: "Slot request tickets",
-        value: "slot",
-        emoji: "🎟️",
-      },
-      {
-        label: "Konvoy Daveti | Convoy Invitation",
-        description: "Official convoy invitations",
-        value: "convoy",
-        emoji: "🚛",
-      },
-      {
-        label: "Partner | Partnership",
-        description: "Partnership and collaboration requests",
-        value: "partner",
-        emoji: "🤝",
-      },
-    ]);
+    .addOptions(options);
 
   return [new ActionRowBuilder().addComponents(select)];
 }
@@ -281,33 +299,82 @@ function buildTicketButtons() {
   ];
 }
 
-function buildTicketCreatedEmbed(user, config) {
+function buildTicketEmbed(user, category, settings) {
   return new EmbedBuilder()
     .setColor(0xf97316)
     .setTitle("✅ Request Registered")
     .setDescription(
-`Your request has been successfully forwarded to the relevant department. Please explain your request clearly and wait for the authorized team to review your ticket.
-
-**Department:** ${config.labelEn}
-**Bölüm:** ${config.labelTr}
-
-Talebiniz ilgili birime iletilmiştir. Lütfen isteğinizi açık ve net şekilde belirtin, ardından yetkili ekibin incelemesini bekleyin.`
+      `Your request has been forwarded to the relevant department.\n\n` +
+        `**Department:** ${category.english}\n` +
+        `**Bölüm:** ${category.name}\n\n` +
+        `Talebiniz ilgili birime iletilmiştir. Lütfen isteğinizi açık ve net şekilde belirtin.`
     )
-    .addFields({
-      name: "Opened By",
-      value: `${user.tag}`,
-      inline: true,
-    })
-    .setFooter({ text: "Zirve Group Request Desk" });
+    .addFields(
+      { name: "Opened By", value: user.tag, inline: true },
+      { name: "Priority", value: category.priority || "Normal", inline: true }
+    )
+    .setFooter({ text: settings.botName || "Zirve Ticket" });
 }
 
-function buildLogEmbed(title, description) {
-  return new EmbedBuilder()
-    .setColor(0xf59e0b)
-    .setTitle(title)
-    .setDescription(description)
-    .setTimestamp();
+async function sendLog(guild, title, description) {
+  try {
+    const settings = getSettings();
+    const logChannelId = settings.logChannelId || "1395722793915519026";
+    const channel = guild.channels.cache.get(logChannelId);
+
+    if (!channel || channel.type !== ChannelType.GuildText) return;
+
+    const embed = new EmbedBuilder()
+      .setColor(0xf59e0b)
+      .setTitle(title)
+      .setDescription(description)
+      .setTimestamp();
+
+    await channel.send({ embeds: [embed] });
+  } catch (error) {
+    console.error("Log gönderme hatası:", error);
+  }
 }
+
+/* ---------------- API ---------------- */
+
+const app = express();
+app.use(cors());
+app.use(express.json({ limit: "2mb" }));
+
+app.get("/", (req, res) => {
+  res.send("Zirve Ticket API aktif.");
+});
+
+app.get("/api/settings", (req, res) => {
+  res.json(getSettings());
+});
+
+app.post("/api/settings", (req, res) => {
+  const apiKey = req.headers["x-api-key"];
+  if (apiKey !== PANEL_API_KEY) {
+    return res.status(401).json({ error: "Yetkisiz istek" });
+  }
+
+  try {
+    const body = req.body;
+    if (!body || typeof body !== "object") {
+      return res.status(400).json({ error: "Geçersiz veri" });
+    }
+
+    saveSettings(body);
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error("API kayıt hatası:", error);
+    return res.status(500).json({ error: "Kayıt hatası" });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log("API server aktif:", PORT);
+});
+
+/* ---------------- BOT ---------------- */
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
@@ -315,36 +382,24 @@ const client = new Client({
 });
 
 const commands = [
-  new SlashCommandBuilder()
-    .setName("ping")
-    .setDescription("Botun çalışıp çalışmadığını test eder."),
+  new SlashCommandBuilder().setName("ping").setDescription("Bot çalışıyor mu"),
   new SlashCommandBuilder()
     .setName("ticket-panel")
-    .setDescription("Ticket panelini gönderir.")
+    .setDescription("Ticket panelini gönderir")
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-  new SlashCommandBuilder()
-    .setName("blacklist-add")
-    .setDescription("Kullanıcıyı blacklist'e ekler.")
-    .addUserOption((o) =>
-      o.setName("user").setDescription("Kullanıcı").setRequired(true)
-    )
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
-  new SlashCommandBuilder()
-    .setName("blacklist-remove")
-    .setDescription("Kullanıcıyı blacklist'ten çıkarır.")
-    .addUserOption((o) =>
-      o.setName("user").setDescription("Kullanıcı").setRequired(true)
-    )
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 ].map((cmd) => cmd.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
 client.once(Events.ClientReady, async () => {
   console.log(`Bot giriş yaptı: ${client.user.tag}`);
+
   try {
     await rest.put(
-      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
+      Routes.applicationGuildCommands(
+        process.env.CLIENT_ID,
+        process.env.GUILD_ID
+      ),
       { body: commands }
     );
     console.log("Komutlar yüklendi.");
@@ -358,145 +413,159 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isChatInputCommand()) {
       if (interaction.commandName === "ping") {
         return await interaction.reply({
-          content: "Pong! Bot aktif.",
+          content: "Pong!",
           ephemeral: true,
         });
       }
 
       if (interaction.commandName === "ticket-panel") {
+        const settings = getSettings();
         return await interaction.reply({
-          embeds: [
-            buildMainPanelEmbedTR(),
-            buildMainPanelEmbedEN(),
-            buildCategoryInfoEmbed(),
-          ],
-          components: buildPanelComponents(),
-        });
-      }
-
-      if (interaction.commandName === "blacklist-add") {
-        const user = interaction.options.getUser("user", true);
-        const state = readState();
-        if (!state.blacklistedUsers.includes(user.id)) {
-          state.blacklistedUsers.push(user.id);
-          writeState(state);
-        }
-        return await interaction.reply({
-          content: `${user.tag} blacklist'e eklendi.`,
-          ephemeral: true,
-        });
-      }
-
-      if (interaction.commandName === "blacklist-remove") {
-        const user = interaction.options.getUser("user", true);
-        const state = readState();
-        state.blacklistedUsers = state.blacklistedUsers.filter((id) => id !== user.id);
-        writeState(state);
-        return await interaction.reply({
-          content: `${user.tag} blacklist'ten çıkarıldı.`,
-          ephemeral: true,
+          embeds: buildPanelEmbeds(settings),
+          components: buildPanelComponents(settings),
         });
       }
     }
 
-    if (interaction.isStringSelectMenu()) {
-      if (interaction.customId === "ticket_category_select") {
-        await interaction.deferReply({ ephemeral: true });
+    if (
+      interaction.isStringSelectMenu() &&
+      interaction.customId === "ticket_category_select"
+    ) {
+      await interaction.deferReply({ ephemeral: true });
 
-        const selected = interaction.values[0];
-        const config = CATEGORY_MAP[selected];
+      const settings = getSettings();
+      const categoryKey = interaction.values[0];
+      const category = getCategoryConfig(categoryKey);
 
-        if (!config) {
-          return await interaction.editReply({
-            content: "Geçersiz kategori seçimi.",
-          });
-        }
-
-        if (isBlacklisted(interaction.user.id)) {
-          return await interaction.editReply({
-            content: "Ticket sistemi kullanımın kapatılmış.",
-          });
-        }
-
-        const existing = getOpenTicketByUser(interaction.guild, interaction.user.id);
-        if (existing) {
-          return await interaction.editReply({
-            content: `Zaten açık bir ticketın var: ${existing}`,
-          });
-        }
-
-        const channelName = formatTicketName(selected, interaction.user.username);
-
-        const channel = await interaction.guild.channels.create({
-          name: channelName,
-          type: ChannelType.GuildText,
-          parent: config.channelCategoryId,
-          topic: `zirve_ticket:true|owner:${interaction.user.id}|type:${selected}`,
-          permissionOverwrites: [
-            {
-              id: interaction.guild.id,
-              deny: [PermissionsBitField.Flags.ViewChannel],
-            },
-            {
-              id: interaction.user.id,
-              allow: [
-                PermissionsBitField.Flags.ViewChannel,
-                PermissionsBitField.Flags.SendMessages,
-                PermissionsBitField.Flags.ReadMessageHistory,
-                PermissionsBitField.Flags.AttachFiles,
-              ],
-            },
-            {
-              id: client.user.id,
-              allow: [
-                PermissionsBitField.Flags.ViewChannel,
-                PermissionsBitField.Flags.SendMessages,
-                PermissionsBitField.Flags.ReadMessageHistory,
-                PermissionsBitField.Flags.ManageChannels,
-                PermissionsBitField.Flags.AttachFiles,
-              ],
-            },
-          ],
-        });
-
-        await channel.send({
-          content: `<@${interaction.user.id}>`,
-          embeds: [buildTicketCreatedEmbed(interaction.user, config)],
-          components: buildTicketButtons(),
-        });
-
-        await sendLog(
-          interaction.guild,
-          buildLogEmbed(
-            "Ticket Opened",
-            `A new request has been created.
-
-**User:** ${interaction.user.tag}
-**Department:** ${config.labelEn}
-**Channel:** ${channel}`
-          )
-        );
-
+      if (!category || !category.enabled) {
         return await interaction.editReply({
-          content: `Ticket başarıyla açıldı: ${channel}`,
+          content: "Geçersiz kategori.",
         });
       }
+
+      if (settings.blacklistEnabled && isBlacklisted(interaction.user.id)) {
+        return await interaction.editReply({
+          content: "Ticket sistemi kullanımın kapatılmış.",
+        });
+      }
+
+      const openCount = countOpenTicketsForUser(
+        interaction.guild,
+        interaction.user.id
+      );
+
+      if (openCount >= (settings.maxTicketsPerUser || 1)) {
+        return await interaction.editReply({
+          content: `Maksimum açık ticket limitine ulaştın. Limit: ${settings.maxTicketsPerUser || 1}`,
+        });
+      }
+
+      if (!category.categoryId) {
+        return await interaction.editReply({
+          content: "Bu kategori için Discord kategori ID ayarlanmamış.",
+        });
+      }
+
+      const ticketNo = settings.showTicketNumber
+        ? String(nextTicketNumber(categoryKey)).padStart(2, "0")
+        : "00";
+
+      const channelName = `${categoryKey}-${sanitizeName(
+        interaction.user.username
+      )}-${ticketNo}`;
+
+      const permissionOverwrites = [
+        {
+          id: interaction.guild.id,
+          deny: [PermissionsBitField.Flags.ViewChannel],
+        },
+        {
+          id: interaction.user.id,
+          allow: [
+            PermissionsBitField.Flags.ViewChannel,
+            PermissionsBitField.Flags.SendMessages,
+            PermissionsBitField.Flags.ReadMessageHistory,
+            PermissionsBitField.Flags.AttachFiles,
+          ],
+        },
+        {
+          id: client.user.id,
+          allow: [
+            PermissionsBitField.Flags.ViewChannel,
+            PermissionsBitField.Flags.SendMessages,
+            PermissionsBitField.Flags.ReadMessageHistory,
+            PermissionsBitField.Flags.ManageChannels,
+            PermissionsBitField.Flags.AttachFiles,
+          ],
+        },
+      ];
+
+      const supportRole = category.supportRole || settings.defaultSupportRoleId;
+      if (supportRole && /^\d+$/.test(String(supportRole))) {
+        permissionOverwrites.push({
+          id: supportRole,
+          allow: [
+            PermissionsBitField.Flags.ViewChannel,
+            PermissionsBitField.Flags.SendMessages,
+            PermissionsBitField.Flags.ReadMessageHistory,
+          ],
+        });
+      }
+
+      const channel = await interaction.guild.channels.create({
+        name: channelName,
+        type: ChannelType.GuildText,
+        parent: category.categoryId,
+        topic: `zirve_ticket:true|owner:${interaction.user.id}|type:${categoryKey}`,
+        permissionOverwrites,
+      });
+
+      const content =
+        settings.autoTagSupport &&
+        supportRole &&
+        /^\d+$/.test(String(supportRole))
+          ? `<@&${supportRole}> <@${interaction.user.id}>`
+          : `<@${interaction.user.id}>`;
+
+      await channel.send({
+        content,
+        embeds: [buildTicketEmbed(interaction.user, category, settings)],
+        components: buildTicketButtons(),
+      });
+
+      await sendLog(
+        interaction.guild,
+        "Ticket Opened",
+        `User: ${interaction.user.tag}\nDepartment: ${category.english}\nChannel: ${channel}`
+      );
+
+      return await interaction.editReply({
+        content: `Ticket açıldı: ${channel}`,
+      });
     }
 
     if (interaction.isButton()) {
       if (!isTicketChannel(interaction.channel)) {
         return await interaction.reply({
-          content: "Bu buton burada kullanılamaz.",
+          content: "Bu işlem sadece ticket kanalında kullanılabilir.",
           ephemeral: true,
         });
       }
 
       if (interaction.customId === "ticket_claim") {
-        const existingClaim = getClaim(interaction.channel.id);
+        const settings = getSettings();
 
+        if (!settings.claimEnabled) {
+          return await interaction.reply({
+            content: "Claim sistemi kapalı.",
+            ephemeral: true,
+          });
+        }
+
+        const existingClaim = getClaim(interaction.channel.id);
         if (existingClaim && existingClaim !== interaction.user.id) {
           return await interaction.reply({
-            content: `Bu talep zaten <@${existingClaim}> tarafından üstlenildi.`,
+            content: `Bu ticket zaten <@${existingClaim}> tarafından üstlenildi.`,
             ephemeral: true,
           });
         }
@@ -505,13 +574,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         await sendLog(
           interaction.guild,
-          buildLogEmbed(
-            "Ticket Claimed",
-            `This request has been assigned to an authorized staff member.
-
-**Staff:** ${interaction.user.tag}
-**Channel:** #${interaction.channel.name}`
-          )
+          "Ticket Claimed",
+          `Staff: ${interaction.user.tag}\nChannel: #${interaction.channel.name}`
         );
 
         return await interaction.reply({
@@ -522,22 +586,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       if (interaction.customId === "ticket_close") {
         await interaction.reply({
-          content: "Talep 3 saniye içinde kapatılacak.",
+          content: "Ticket 3 saniye içinde kapatılacak.",
           ephemeral: true,
         });
 
+        clearClaim(interaction.channel.id);
+
         await sendLog(
           interaction.guild,
-          buildLogEmbed(
-            "Ticket Closed",
-            `The request has been closed and archived.
-
-**Closed By:** ${interaction.user.tag}
-**Channel:** #${interaction.channel.name}`
-          )
+          "Ticket Closed",
+          `By: ${interaction.user.tag}\nChannel: #${interaction.channel.name}`
         );
-
-        clearClaim(interaction.channel.id);
 
         setTimeout(async () => {
           try {
@@ -546,8 +605,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
             console.error("Kanal silme hatası:", error);
           }
         }, 3000);
-
-        return;
       }
     }
   } catch (error) {
@@ -555,10 +612,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     try {
       if (interaction.deferred) {
-        await interaction.editReply({ content: "Bir hata oluştu." });
+        await interaction.editReply({
+          content: "Bir hata oluştu. Konsol logunu kontrol et.",
+        });
       } else if (!interaction.replied) {
         await interaction.reply({
-          content: "Bir hata oluştu.",
+          content: "Bir hata oluştu. Konsol logunu kontrol et.",
           ephemeral: true,
         });
       }
@@ -567,7 +626,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 if (!process.env.DISCORD_TOKEN) {
-  console.log("DISCORD_TOKEN eksik. .env dosyasını doldur.");
+  console.log("DISCORD_TOKEN eksik.");
 } else {
   client.login(process.env.DISCORD_TOKEN);
 }
