@@ -1,0 +1,12 @@
+﻿{
+  "botName": "Zirve Tickets",
+  "panelTitle": "Zirve Logistics Destek Merkezi",
+  "panelDescription": "Aşağıdaki menüden uygun kategori seçerek ticket açabilirsiniz.",
+  "maxTicketsPerUser": 2,
+  "supportRoleId": "",
+  "categoryId": "1395722333104115815",
+  "logChannelId": "",
+  "transcriptEnabled": true,
+  "claimEnabled": true,
+  "blacklistEnabled": true
+}
